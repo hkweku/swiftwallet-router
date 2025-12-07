@@ -7,6 +7,7 @@ import { GasOracleModule } from './gas-oracle/gas-oracle.module';
 import { RoutingModule } from './routing/routing.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
 import { TransfersModule } from './transfers/transfers.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -21,5 +22,6 @@ import { TransfersModule } from './transfers/transfers.module';
     BlockchainModule,
     TransfersModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}

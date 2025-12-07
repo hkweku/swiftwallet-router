@@ -7,7 +7,7 @@ import { PrismaService } from './prisma/prisma.service';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true });
   const logger = new Logger('Bootstrap');
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: ['/'] });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -35,4 +35,4 @@ async function bootstrap() {
   logger.log(`Swagger docs available at http://localhost:${port}/docs`);
 }
 
-bootstrap();
+void bootstrap();

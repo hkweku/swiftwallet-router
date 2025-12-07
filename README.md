@@ -1,4 +1,4 @@
-# SwiftWallet Routing Engine for BMoni
+# SwiftWallet Routing Engine for BMONI
 
 A backend system that abstracts multi-chain USDC transfers by unifying balances across chains, automatically selecting the best blockchain for each transfer, and bridging funds when needed.
 
@@ -6,7 +6,7 @@ A backend system that abstracts multi-chain USDC transfers by unifying balances 
 
 The SwiftWallet Routing Engine is a modular NestJS monolith designed to:
 
-- **Unify USDC balances** across multiple blockchains (Polygon, Ethereum, Arbitrum)
+- **Unify USDC balances** across multiple blockchains (Polygon, Ethereum, Arbitrum ,etc)
 - **Automatically select** the optimal blockchain for each transfer based on gas fees and confirmation times
 - **Bridge funds** between chains when necessary
 - **Execute transfers** through a mock blockchain interface
@@ -54,7 +54,7 @@ The server will start on `http://localhost:3000` (or the port specified in `PORT
 - **API Base URL**: `http://localhost:3000/api`
 - **Swagger Documentation**: `http://localhost:3000/docs`
 
-## 📖 API Endpoints
+## API Endpoints
 
 ### GET `/api/users/:userId/balance`
 
@@ -318,4 +318,4 @@ PORT=3000
 
 ## License
 
-This project is part of a take-home assessment and is not licensed for production use.
+This project is part of a take-home assessment for BMONI and is not licensed for production use.
