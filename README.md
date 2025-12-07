@@ -1,98 +1,321 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# SwiftWallet Routing Engine for BMoni
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A backend system that abstracts multi-chain USDC transfers by unifying balances across chains, automatically selecting the best blockchain for each transfer, and bridging funds when needed.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Project Overview
 
-## Description
+The SwiftWallet Routing Engine is a modular NestJS monolith designed to:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **Unify USDC balances** across multiple blockchains (Polygon, Ethereum, Arbitrum)
+- **Automatically select** the optimal blockchain for each transfer based on gas fees and confirmation times
+- **Bridge funds** between chains when necessary
+- **Execute transfers** through a mock blockchain interface
+- **Return clear routing decisions** with fees and confirmation estimates
 
-## Project setup
+The system is intentionally structured around microservice-oriented boundaries, making it easy to extract into separate services in production.
+
+## Tech Stack
+
+- **NestJS** (v11) - Progressive Node.js framework
+- **TypeScript** - Type-safe development
+- **Prisma ORM** - Database toolkit
+- **SQLite** - Simple database for development (production would use PostgreSQL)
+- **Jest** - Testing framework
+- **Swagger/OpenAPI** - Auto-generated API documentation
+
+## Installation
 
 ```bash
-$ npm install
+# Install dependencies
+npm install
+
+# Generate Prisma client
+npm run prisma:generate
+
+# Run database migrations
+npm run prisma:migrate
+
+# Seed the database with initial data
+npm run db:seed
 ```
 
-## Compile and run the project
+## Running Locally
 
 ```bash
-# development
-$ npm run start
+# Development mode (with hot reload)
+npm run start:dev
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Production mode
+npm run start:prod
 ```
 
-## Run tests
+The server will start on `http://localhost:3000` (or the port specified in `PORT` environment variable).
+
+- **API Base URL**: `http://localhost:3000/api`
+- **Swagger Documentation**: `http://localhost:3000/docs`
+
+## 📖 API Endpoints
+
+### GET `/api/users/:userId/balance`
+
+Returns the unified USDC balance across all chains for a user.
+
+**Response:**
+
+```json
+{
+  "userId": "user_1",
+  "totalUsdValue": 335.5,
+  "perChain": [
+    { "chain": "polygon", "balance": "250.0" },
+    { "chain": "ethereum", "balance": "75.5" },
+    { "chain": "arbitrum", "balance": "10.0" }
+  ]
+}
+```
+
+### POST `/api/transfers`
+
+Creates a new USDC transfer between users, automatically routing through the optimal chain.
+
+**Request:**
+
+```json
+{
+  "fromUserId": "user_1",
+  "toUserId": "user_2",
+  "amount": "50"
+}
+```
+
+**Response:**
+
+```json
+{
+  "transferId": "abc-123-def-456",
+  "route": {
+    "sourceChain": "polygon",
+    "destinationChain": "polygon",
+    "needsBridge": false,
+    "steps": [
+      {
+        "type": "transfer",
+        "chainId": "polygon",
+        "amount": "50",
+        "estimatedFeeUsd": 0.005,
+        "estimatedConfirmationMs": 30000
+      }
+    ],
+    "reason": "lowest gas + sufficient balance"
+  }
+}
+```
+
+### GET `/api/chains`
+
+Returns all available blockchain networks.
+
+### GET `/api/chains/:chainId`
+
+Returns details for a specific chain.
+
+## Routing Algorithm
+
+The routing engine uses a sophisticated scoring algorithm to select the optimal transfer path:
+
+### Step 1: Load Data
+
+- Fetch user balances across all chains
+- Get current gas prices and confirmation times from the gas oracle
+
+### Step 2: Direct Chain Candidates
+
+A chain qualifies for direct transfer if:
+
+- User balance on chain ≥ transfer amount
+- Chain is active (`isActive === true`)
+
+### Step 3: Scoring Direct Chains
+
+If multiple chains have sufficient balance, the system scores each using:
+
+```
+score = (gasFeeUsd × 0.7) + (confirmationTimeMs / 1000 × 0.3)
+```
+
+The chain with the **lowest score** is selected.
+
+### Step 4: Bridging Evaluation
+
+If no single chain has sufficient balance, the system evaluates bridging:
+
+For every source chain with balance > 0, combined with every possible destination chain:
+
+- Calculate bridge fee (USD)
+- Calculate transfer fee (USD)
+- Calculate total time = bridge time + confirmation time
+- Compute combined score
+
+The path with the **lowest combined score** is selected.
+
+### Step 5: Route Decision
+
+The system returns a `RouteDecision` with:
+
+- Source and destination chains
+- Whether bridging is needed
+- Step-by-step execution plan
+- Estimated fees and confirmation times
+- Human-readable reason for the selection
+
+## Transfer Execution Flow
+
+1. **Validation**: DTO validation and balance checks
+2. **Routing**: Determine optimal transfer path
+3. **Persistence**: Create transfer and step records (status: `pending`)
+4. **Execution**: Execute steps sequentially:
+   - If bridging needed: Bridge funds → update balances → mark step complete
+   - Transfer funds → update balances → mark step complete
+5. **Completion**: Update transfer status to `completed`
+6. **Response**: Return transfer details with routing information
+
+## Testing
 
 ```bash
-# unit tests
-$ npm run test
+# Run unit tests
+npm run test
 
-# e2e tests
-$ npm run test:e2e
+# Run tests in watch mode
+npm run test:watch
 
-# test coverage
-$ npm run test:cov
+# Run tests with coverage
+npm run test:cov
+
+# Run end-to-end tests
+npm run test:e2e
 ```
 
-## Deployment
+## Database
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+The project uses SQLite for simplicity in development. The database schema includes:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+- **Chain**: Blockchain network information
+- **UserChainBalance**: User balances per chain
+- **Transfer**: Transfer records
+- **TransferStep**: Individual steps within a transfer (bridge/transfer operations)
+
+To view the database:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run prisma:studio
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Assumptions
 
-## Resources
+1. **USDC is fungible** across all supported chains
+2. **Gas prices** are provided by the gas oracle service (currently mocked)
+3. **Bridge fees** are fixed per chain pair (currently mocked)
+4. **Transfer amounts** are in USDC (not native tokens)
+5. **Balances** are pre-existing and managed externally
+6. **Blockchain operations** are simulated with random latency (300-1200ms)
 
-Check out a few resources that may come in handy when working with NestJS:
+## Scoring Model Rationale
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+To pick the best chain when more than one option is available, I use a simple weighted score:
 
-## Support
+```
+score = (gasFeeUsd × 0.7) + ((confirmationTimeMs / 1000) × 0.3)
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Cost gets a higher weight (70%) because users usually care more about paying less in gas fees.
+Confirmation time still matters (30%), but a few extra seconds is normally fine if the transaction is cheaper.
 
-## Stay in touch
+I divide confirmation time by 1000 just to convert milliseconds into seconds so the numbers stay reasonable.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+This formula is basic and in a real system the weights could be adjusted or replaced with actual gas-price and network-speed data.
+
+## SQLite Justification
+
+SQLite is used for this take-home assessment to:
+
+- **Simplify setup** - No database server required
+- **Quick iteration** - Easy to reset and reseed
+- **Portability** - Single file database
+- **Production readiness** - The Prisma schema and code are designed to work seamlessly with PostgreSQL in production
+
+In production, you would:
+
+1. Change the database URL in `.env` to a PostgreSQL connection string
+2. Run `prisma migrate deploy` (no code changes needed)
+3. The application will work identically
+
+## Future Evolution to Microservices
+
+This project is implemented as a clean modular monolith for simplicity, but the domain boundaries map directly to microservices. For example:
+
+- **Routing** → Payments Orchestrator Service
+- **Balances** → Wallet / Ledger Service
+- **Gas Oracle** → Pricing/Fees Service
+- **Blockchain** → Chain Connector Service
+
+In a production environment, these modules could be extracted behind an API Gateway, communicating via HTTP or a message bus (e.g., RabbitMQ, Kafka). The current module boundaries and dependency injection structure make this migration straightforward.
+
+## Project Structure
+
+```
+src/
+├── app.module.ts              # Root module
+├── main.ts                    # Application entry point
+├── chains/                    # Chain management
+│   ├── chains.module.ts
+│   ├── chains.service.ts
+│   ├── chains.controller.ts
+│   ├── entities/
+│   └── dtos/
+├── balances/                  # Balance management
+│   ├── balances.module.ts
+│   ├── balances.service.ts
+│   ├── balances.controller.ts
+│   ├── entities/
+│   └── dtos/
+├── gas-oracle/               # Gas price oracle
+│   ├── gas-oracle.module.ts
+│   ├── gas-oracle.service.ts
+│   └── interfaces/
+├── routing/                  # Routing algorithm
+│   ├── routing.module.ts
+│   ├── routing.service.ts
+│   ├── interfaces/
+│   └── utils/
+├── blockchain/              # Mock blockchain interface
+│   ├── blockchain.module.ts
+│   ├── blockchain.service.ts
+│   └── interfaces/
+├── transfers/               # Transfer execution
+│   ├── transfers.module.ts
+│   ├── transfers.service.ts
+│   ├── transfers.controller.ts
+│   ├── entities/
+│   └── dtos/
+├── prisma/                  # Prisma service
+│   ├── prisma.module.ts
+│   └── prisma.service.ts
+└── common/                  # Shared utilities
+    ├── exceptions/
+    ├── utils/
+    ├── constants/
+    └── dtos/
+```
+
+## Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+DATABASE_URL="file:./dev.db"
+PORT=3000
+```
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is part of a take-home assessment and is not licensed for production use.
