@@ -27,12 +27,28 @@ const chains = [
     usdcAddress: '0x000000000000000000000000000000000000aRb1',
     isActive: true,
   },
+  {
+    id: 'avalanche',
+    name: 'Avalanche',
+    nativeToken: 'AVAX',
+    usdcAddress: '0x000000000000000000000000000000000000aVaX',
+    isActive: true,
+  },
+  {
+    id: 'base',
+    name: 'Base',
+    nativeToken: 'ETH',
+    usdcAddress: '0x000000000000000000000000000000000000BaSe',
+    isActive: true,
+  },
 ];
 
 const balances = [
   { userId: 'user_1', chainId: 'polygon', balance: new Decimal(250) },
   { userId: 'user_1', chainId: 'ethereum', balance: new Decimal(75.5) },
   { userId: 'user_1', chainId: 'arbitrum', balance: new Decimal(10) },
+  { userId: 'user_1', chainId: 'avalanche', balance: new Decimal(150) },
+  { userId: 'user_2', chainId: 'base', balance: new Decimal(25) },
   { userId: 'user_2', chainId: 'polygon', balance: new Decimal(12) },
 ];
 

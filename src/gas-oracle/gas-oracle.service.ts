@@ -8,6 +8,8 @@ const BASE_GAS_DATA: Omit<
   { chainId: 'polygon' },
   { chainId: 'ethereum' },
   { chainId: 'arbitrum' },
+  { chainId: 'avalanche' },
+  { chainId: 'base' },
 ];
 
 @Injectable()
@@ -35,6 +37,18 @@ export class GasOracleService {
     },
     arbitrum: {
       gasFeeUsd: 0.02,
+      confirmationMs: 15_000,
+      bridgeFeeUsd: 0.5,
+      bridgeTimeMs: 45_000,
+    },
+    avalanche: {
+      gasFeeUsd: 0.01,
+      confirmationMs: 30_000,
+      bridgeFeeUsd: 0.25,
+      bridgeTimeMs: 90_000,
+    },
+    base: {
+      gasFeeUsd: 0.01,
       confirmationMs: 15_000,
       bridgeFeeUsd: 0.5,
       bridgeTimeMs: 45_000,

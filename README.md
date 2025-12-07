@@ -14,6 +14,16 @@ The SwiftWallet Routing Engine is a modular NestJS monolith designed to:
 
 The system is intentionally structured around microservice-oriented boundaries, making it easy to extract into separate services in production.
 
+## Live Deployment
+
+You can test the live API here:
+
+- **Root Endpoint**: `https://swiftwallet-router.onrender.com/` - Returns API information (title, version, description)
+- **API Base URL**: `https://swiftwallet-router.onrender.com/api`
+- **Swagger Documentation**: `https://swiftwallet-router.onrender.com/docs`
+
+You can test all API endpoints directly through the Swagger UI at the docs URL above. The interactive documentation allows you to make live API calls and see responses in real-time.
+
 ## Tech Stack
 
 - **NestJS** (v11) - Progressive Node.js framework
@@ -259,6 +269,23 @@ This project is implemented as a clean modular monolith for simplicity, but the 
 - **Blockchain** → Chain Connector Service
 
 In a production environment, these modules could be extracted behind an API Gateway, communicating via HTTP or a message bus (e.g., RabbitMQ, Kafka). The current module boundaries and dependency injection structure make this migration straightforward.
+
+## Authentication
+
+Authentication is intentionally omitted because the take-home question focuses on routing logic, chain evaluation, and transaction orchestration.
+
+For a real production environment (such as BMoni's), I would implement
+a dedicated Authentication & Identity service responsible for:
+
+- JWT or OAuth 2.0 flows or using BMONI's proprietory Authentication mechanisms,
+- user verification,
+- device binding,
+- permission scopes,
+- rate limiting,
+- request signing.
+
+The current design cleanly supports adding an auth layer via NestJS guards
+and middleware without changing the core business logic.
 
 ## Project Structure
 
