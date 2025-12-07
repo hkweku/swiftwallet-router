@@ -29,7 +29,7 @@ async function bootstrap() {
   prismaService.enableShutdownHooks(app);
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  await app.listen(port as number, '0.0.0.0');
 
   logger.log(`SwiftWallet Router running on http://localhost:${port}/api`);
   logger.log(`Swagger docs available at http://localhost:${port}/docs`);
