@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Chain {
+  id           String              @id
+  name         String
+  nativeToken  String
+  usdcAddress  String
+  isActive     Boolean             @default(true)
+  balances     UserChainBalance[]
+  transferStep TransferStep[]
+}
+
+model UserChainBalance {
+  id      String  @id @default(uuid())
+  userId  String
+  chainId String
+  balance Decimal
+
+  chain Chain @relation(fields: [chainId], references: [id])
+
+  @@unique([userId, chainId])
+}
+
+model Transfer {
+  id         String         @id @default(uuid())
+  fromUserId String
+  toUserId   String
+  amount     Decimal
+  status     String         @default("pending")
+  createdAt  DateTime       @default(now())
+  steps      TransferStep[]
+}
+
+model TransferStep {
+  id         String  @id @default(uuid())
+  transferId String
+  type       String
+  chainId    String
+  amount     Decimal
+  feeUsd     Decimal
+  txId       String?
+  status     String  @default("pending")
+
+  transfer Transfer @relation(fields: [transferId], references: [id])
+  chain    Chain    @relation(fields: [chainId], references: [id])
+}
+
