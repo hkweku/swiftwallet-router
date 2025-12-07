@@ -7,6 +7,7 @@ export type DecimalType = {
   add: (value: DecimalType) => DecimalType;
   lt: (value: DecimalType) => boolean;
   lte: (value: DecimalType | number) => boolean;
+  gt: (value: DecimalType | number) => boolean;
   gte: (value: DecimalType | number) => boolean;
   minus: (value: DecimalType) => DecimalType;
 };

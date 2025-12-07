@@ -144,51 +144,132 @@ export class RoutingService {
     activeSet: Set<string>,
     balanceMap: Map<string, DecimalType>,
   ): RouteDecision | null {
-    const candidates = [];
+    const candidates: {
+      destinationChain: string;
+      score: number;
+      bridgeSteps: {
+        sourceChain: string;
+        amount: DecimalType;
+        sourceGas: {
+          gasFeeUsd: number;
+          confirmationMs: number;
+          bridgeFeeUsd: number;
+          bridgeTimeMs: number;
+        };
+      }[];
+      destGas: {
+        gasFeeUsd: number;
+        confirmationMs: number;
+        bridgeFeeUsd: number;
+        bridgeTimeMs: number;
+      };
+    }[] = [];
 
-    for (const balance of balances) {
-      const sourceAmount = toDecimal(balance.balance);
-      const sourceGas = gasMap.get(balance.chainId);
-      if (!sourceGas) {
+    // Consider each active chain as a potential *destination* chain
+    for (const destChainId of activeSet) {
+      const destGas = gasMap.get(destChainId);
+      if (!destGas) continue;
+
+      const destBalance = balanceMap.get(destChainId) ?? toDecimal(0);
+      // If destination already has enough for a direct route,
+      // we should have picked it in pickDirectRoute, so skip here.
+      if (destBalance.gte(amount)) {
         continue;
       }
 
-      for (const [destChainId, destinationGas] of gasMap.entries()) {
-        if (destChainId === balance.chainId || !activeSet.has(destChainId)) {
-          continue;
-        }
-
-        if (!destinationGas) {
-          continue;
-        }
-
-        const currentDestBalance = balanceMap.get(destChainId) ?? toDecimal(0);
-        if (currentDestBalance.gte(amount)) {
-          continue;
-        }
-
-        const requiredBridge = amount.minus(currentDestBalance);
-        if (requiredBridge.lte(0) || sourceAmount.lt(requiredBridge)) {
-          continue;
-        }
-
-        const totalTimeMs =
-          sourceGas.bridgeTimeMs + destinationGas.confirmationMs;
-        const score = calculateBridgeScore(
-          sourceGas.bridgeFeeUsd,
-          destinationGas.gasFeeUsd,
-          totalTimeMs,
-        );
-
-        candidates.push({
-          sourceChain: balance.chainId,
-          destinationChain: destChainId,
-          score,
-          sourceGas,
-          destinationGas,
-          bridgeAmount: requiredBridge,
-        });
+      let remaining = amount.minus(destBalance);
+      if (remaining.lte(0)) {
+        continue;
       }
+
+      // Build list of potential source chains (all others with > 0 balance)
+      const sources = balances
+        .filter((b) => b.chainId !== destChainId)
+        .map((b) => {
+          const available = toDecimal(b.balance);
+          const sourceGas = gasMap.get(b.chainId);
+          return {
+            chainId: b.chainId,
+            available,
+            sourceGas,
+          };
+        })
+        .filter(
+          (s) => s.available.gt(0) && !!s.sourceGas && activeSet.has(s.chainId),
+        ) as {
+        chainId: string;
+        available: DecimalType;
+        sourceGas: {
+          gasFeeUsd: number;
+          confirmationMs: number;
+          bridgeFeeUsd: number;
+          bridgeTimeMs: number;
+        };
+      }[];
+
+      // Greedy: sort sources by cheapest bridge fee first
+      sources.sort(
+        (a, b) => a.sourceGas.bridgeFeeUsd - b.sourceGas.bridgeFeeUsd,
+      );
+
+      const bridgeSteps: {
+        sourceChain: string;
+        amount: DecimalType;
+        sourceGas: {
+          gasFeeUsd: number;
+          confirmationMs: number;
+          bridgeFeeUsd: number;
+          bridgeTimeMs: number;
+        };
+      }[] = [];
+
+      for (const source of sources) {
+        if (remaining.lte(0)) break;
+
+        const bridgeAmount = source.available.gte(remaining)
+          ? remaining
+          : source.available;
+
+        if (bridgeAmount.lte(0)) continue;
+
+        bridgeSteps.push({
+          sourceChain: source.chainId,
+          amount: bridgeAmount,
+          sourceGas: source.sourceGas,
+        });
+
+        remaining = remaining.minus(bridgeAmount);
+      }
+
+      // If after using all sources we still don't cover the amount, skip this dest
+      if (remaining.gt(0)) {
+        continue;
+      }
+
+      // Compute aggregate bridge fee and time for scoring
+      const totalBridgeFeeUsd = bridgeSteps.reduce(
+        (sum, step) => sum + step.sourceGas.bridgeFeeUsd,
+        0,
+      );
+      const totalBridgeTimeMs = bridgeSteps.reduce(
+        (sum, step) => sum + step.sourceGas.bridgeTimeMs,
+        0,
+      );
+
+      const totalTimeMs = totalBridgeTimeMs + destGas.confirmationMs;
+
+      const score = calculateBridgeScore(
+        totalBridgeFeeUsd,
+        destGas.gasFeeUsd,
+        totalTimeMs,
+      );
+
+      candidates.push({
+        destinationChain: destChainId,
+        score,
+        bridgeSteps,
+        destGas,
+      });
     }
 
     if (!candidates.length) {
@@ -199,29 +280,39 @@ export class RoutingService {
       current.score < prev.score ? current : prev,
     );
 
+    const allBridgeSteps = best.bridgeSteps.map((step) => ({
+      type: 'bridge' as const,
+      chainId: step.sourceChain,
+      amount: step.amount.toFixed(6),
+      estimatedFeeUsd: step.sourceGas.bridgeFeeUsd,
+      estimatedConfirmationMs: step.sourceGas.bridgeTimeMs,
+      metadata: { toChainId: best.destinationChain },
+    }));
+
     return {
-      sourceChain: best.sourceChain,
+      sourceChain:
+        allBridgeSteps.length === 1
+          ? allBridgeSteps[0].chainId
+          : 'multi-source',
       destinationChain: best.destinationChain,
       needsBridge: true,
       score: best.score,
       steps: [
-        {
-          type: 'bridge',
-          chainId: best.sourceChain,
-          amount: best.bridgeAmount.toFixed(6),
-          estimatedFeeUsd: best.sourceGas.bridgeFeeUsd,
-          estimatedConfirmationMs: best.sourceGas.bridgeTimeMs,
-          metadata: { toChainId: best.destinationChain },
-        },
+        ...allBridgeSteps,
         {
           type: 'transfer',
           chainId: best.destinationChain,
           amount: amount.toFixed(6),
-          estimatedFeeUsd: best.destinationGas.gasFeeUsd,
-          estimatedConfirmationMs: best.destinationGas.confirmationMs,
+          estimatedFeeUsd: best.destGas.gasFeeUsd,
+          estimatedConfirmationMs: best.destGas.confirmationMs,
         },
       ],
-      reason: `Bridging from ${best.sourceChain} to ${best.destinationChain} to satisfy liquidity`,
+      reason:
+        allBridgeSteps.length === 1
+          ? `Bridging from ${allBridgeSteps[0].chainId} to ${best.destinationChain} to satisfy liquidity`
+          : `Aggregating liquidity from ${allBridgeSteps
+              .map((s) => s.chainId)
+              .join(', ')} to ${best.destinationChain} to satisfy liquidity`,
     };
   }
 }
